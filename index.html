@@ -258,7 +258,17 @@
 
       explanationBox.innerHTML = `<strong>解説</strong><br>${q.explanation}`;
       explanationBox.classList.toggle("hidden", !state.explanationOpen);
-      explanationBtn.textContent = state.explanationOpen ? "解説を閉じる" : "解説を見る";
+      // 解説ボタンのラベルは現在の問題の状態に必ず合わせる
+      if (state.explanationOpen) {
+        explanationBtn.textContent = "解説を閉じる";
+      } else {
+        explanationBtn.textContent = "解説を見る";
+      }
+
+      // 未回答の問題に来た場合は必ず初期ラベルに戻す
+      if (!state.answered) {
+        explanationBtn.textContent = "解説を見る";
+      }
 
       q.choices.forEach((choice, index) => {
         const btn = document.createElement("button");
