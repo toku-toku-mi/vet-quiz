@@ -30,6 +30,7 @@
     .sub {
       color: #6b7280;
       margin-bottom: 20px;
+      line-height: 1.7;
     }
     .progress {
       display: inline-block;
@@ -58,6 +59,7 @@
       cursor: pointer;
       font-size: 16px;
       transition: 0.2s;
+      color: #111827;
     }
     .choice:hover { background: #f9fafb; }
     .choice.selected {
@@ -65,16 +67,16 @@
       background: #eef2ff;
     }
     .choice.correct {
-      border-color: #10b981;
-      background: #ecfdf5;
+      border-color: #86efac;
+      background: #dcfce7;
     }
     .choice.wrong {
-      border-color: #f43f5e;
-      background: #fff1f2;
+      border-color: #fda4af;
+      background: #ffe4e6;
     }
     .choice.disabled {
       cursor: default;
-      opacity: 0.9;
+      opacity: 0.95;
     }
     .buttons {
       display: flex;
@@ -98,7 +100,8 @@
       color: #111827;
       border: 1px solid #d1d5db;
     }
-    .primary:disabled {
+    .primary:disabled,
+    .secondary:disabled {
       opacity: 0.45;
       cursor: not-allowed;
     }
@@ -125,6 +128,8 @@
       .container { margin: 16px auto; padding: 12px; }
       .card { padding: 18px; }
       h1 { font-size: 24px; }
+      .buttons { flex-direction: column; }
+      button.action { width: 100%; }
     }
   </style>
 </head>
@@ -132,7 +137,7 @@
   <div class="container">
     <div class="card">
       <h1>獣医学クイズ</h1>
-      <div class="sub">4択から選んで、「回答を見る」で正誤表示、「解説を見る」で解説を確認できます。</div>
+      <div class="sub">4択から選んで、「回答を見る」で正誤表示、「解説を見る」で解説を確認できます。前の問題にも戻れます。</div>
 
       <div id="quiz-area">
         <div class="progress" id="progress"></div>
@@ -141,6 +146,7 @@
         <div id="choices"></div>
 
         <div class="buttons">
+          <button class="action secondary" id="prev-btn">前の問題へ</button>
           <button class="action primary" id="answer-btn" disabled>回答を見る</button>
           <button class="action secondary hidden" id="explanation-btn">解説を見る</button>
           <button class="action primary hidden" id="next-btn">次の問題へ</button>
@@ -197,15 +203,20 @@
       }
     ];
 
+    const questionStates = questions.map(() => ({
+      selectedIndex: null,
+      answered: false,
+      explanationOpen: false,
+      isCorrect: false
+    }));
+
     let currentIndex = 0;
-    let selectedIndex = null;
-    let answerShown = false;
-    let score = 0;
 
     const progress = document.getElementById("progress");
     const questionTitle = document.getElementById("question-title");
     const questionText = document.getElementById("question-text");
     const choicesEl = document.getElementById("choices");
+    const prevBtn = document.getElementById("prev-btn");
     const answerBtn = document.getElementById("answer-btn");
     const explanationBtn = document.getElementById("explanation-btn");
     const nextBtn = document.getElementById("next-btn");
@@ -216,90 +227,114 @@
     const scoreText = document.getElementById("score-text");
     const restartBtn = document.getElementById("restart-btn");
 
+    function getScore() {
+      return questionStates.filter(state => state.answered && state.isCorrect).length;
+    }
+
     function renderQuestion() {
       const q = questions[currentIndex];
-      selectedIndex = null;
-      answerShown = false;
+      const state = questionStates[currentIndex];
 
       progress.textContent = `${currentIndex + 1} / ${questions.length}`;
       questionTitle.textContent = q.title;
       questionText.textContent = q.question;
       choicesEl.innerHTML = "";
-      resultBox.classList.add("hidden");
-      explanationBox.classList.add("hidden");
-      explanationBtn.classList.add("hidden");
-      nextBtn.classList.add("hidden");
-      answerBtn.disabled = true;
+
+      prevBtn.disabled = currentIndex === 0;
+      answerBtn.disabled = state.selectedIndex === null || state.answered;
+      explanationBtn.classList.toggle("hidden", !state.answered);
+      nextBtn.classList.toggle("hidden", !state.answered);
+      nextBtn.textContent = currentIndex === questions.length - 1 ? "結果を見る" : "次の問題へ";
+
+      if (state.answered) {
+        resultBox.classList.remove("hidden");
+        resultBox.innerHTML = state.isCorrect
+          ? `<strong>正解です！</strong><br>正解：${String.fromCharCode(65 + q.correct)}. ${q.choices[q.correct]}`
+          : `<strong>不正解です</strong><br>正解：${String.fromCharCode(65 + q.correct)}. ${q.choices[q.correct]}`;
+      } else {
+        resultBox.classList.add("hidden");
+        resultBox.innerHTML = "";
+      }
+
+      explanationBox.innerHTML = `<strong>解説</strong><br>${q.explanation}`;
+      explanationBox.classList.toggle("hidden", !state.explanationOpen);
+      explanationBtn.textContent = state.explanationOpen ? "解説を閉じる" : "解説を見る";
 
       q.choices.forEach((choice, index) => {
         const btn = document.createElement("button");
         btn.className = "choice";
         btn.innerHTML = `<strong>${String.fromCharCode(65 + index)}.</strong> ${choice}`;
-        btn.addEventListener("click", () => {
-          if (answerShown) return;
-          selectedIndex = index;
-          answerBtn.disabled = false;
-          document.querySelectorAll(".choice").forEach(el => el.classList.remove("selected"));
+
+        if (state.selectedIndex === index) {
           btn.classList.add("selected");
-        });
+        }
+
+        if (state.answered) {
+          btn.classList.add("disabled");
+          btn.classList.remove("selected");
+          if (index === q.correct) {
+            btn.classList.add("correct");
+          }
+          if (state.selectedIndex === index && index !== q.correct) {
+            btn.classList.add("wrong");
+          }
+        } else {
+          btn.addEventListener("click", () => {
+            questionStates[currentIndex].selectedIndex = index;
+            renderQuestion();
+          });
+        }
+
         choicesEl.appendChild(btn);
       });
     }
 
     answerBtn.addEventListener("click", () => {
-      if (selectedIndex === null || answerShown) return;
-
       const q = questions[currentIndex];
-      answerShown = true;
-      const choiceButtons = document.querySelectorAll(".choice");
+      const state = questionStates[currentIndex];
+      if (state.selectedIndex === null || state.answered) return;
 
-      choiceButtons.forEach((btn, index) => {
-        btn.classList.add("disabled");
-        if (index === q.correct) {
-          btn.classList.add("correct");
-        } else if (index === selectedIndex) {
-          btn.classList.add("wrong");
-        }
-      });
-
-      if (selectedIndex === q.correct) {
-        score++;
-        resultBox.innerHTML = `<strong>正解です！</strong><br>正解：${String.fromCharCode(65 + q.correct)}. ${q.choices[q.correct]}`;
-      } else {
-        resultBox.innerHTML = `<strong>不正解です</strong><br>正解：${String.fromCharCode(65 + q.correct)}. ${q.choices[q.correct]}`;
-      }
-
-      explanationBox.innerHTML = `<strong>解説</strong><br>${q.explanation}`;
-      resultBox.classList.remove("hidden");
-      explanationBtn.classList.remove("hidden");
-      nextBtn.classList.remove("hidden");
-      answerBtn.disabled = true;
-      nextBtn.textContent = currentIndex === questions.length - 1 ? "結果を見る" : "次の問題へ";
+      state.answered = true;
+      state.isCorrect = state.selectedIndex === q.correct;
+      renderQuestion();
     });
 
     explanationBtn.addEventListener("click", () => {
-      explanationBox.classList.toggle("hidden");
-      explanationBtn.textContent = explanationBox.classList.contains("hidden") ? "解説を見る" : "解説を閉じる";
+      const state = questionStates[currentIndex];
+      state.explanationOpen = !state.explanationOpen;
+      renderQuestion();
+    });
+
+    prevBtn.addEventListener("click", () => {
+      if (currentIndex === 0) return;
+      currentIndex--;
+      renderQuestion();
     });
 
     nextBtn.addEventListener("click", () => {
-      currentIndex++;
-      if (currentIndex < questions.length) {
-        renderQuestion();
-      } else {
+      if (currentIndex === questions.length - 1) {
         showResult();
+      } else {
+        currentIndex++;
+        renderQuestion();
       }
     });
 
     function showResult() {
       quizArea.classList.add("hidden");
       finishArea.classList.remove("hidden");
+      const score = getScore();
       scoreText.textContent = `${questions.length}問中 ${score}問正解！（正答率 ${Math.round(score / questions.length * 100)}%）`;
     }
 
     restartBtn.addEventListener("click", () => {
       currentIndex = 0;
-      score = 0;
+      questionStates.forEach(state => {
+        state.selectedIndex = null;
+        state.answered = false;
+        state.explanationOpen = false;
+        state.isCorrect = false;
+      });
       finishArea.classList.add("hidden");
       quizArea.classList.remove("hidden");
       renderQuestion();
