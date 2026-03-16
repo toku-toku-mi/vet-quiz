@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>獣医学クイズ</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Hiragino Sans", "Yu Gothic", sans-serif;
+      background: #f6f8fb;
+      color: #1f2937;
+    }
+    .container {
+      max-width: 760px;
+      margin: 40px auto;
+      padding: 20px;
+    }
+    .card {
+      background: #fff;
+      border-radius: 20px;
+      padding: 24px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.08);
+    }
+    h1 {
+      margin: 0 0 8px;
+      font-size: 28px;
+    }
+    .sub {
+      color: #6b7280;
+      margin-bottom: 20px;
+    }
+    .progress {
+      display: inline-block;
+      background: #eef2f7;
+      color: #374151;
+      padding: 8px 14px;
+      border-radius: 999px;
+      font-size: 14px;
+      margin-bottom: 20px;
+    }
+    .question-box {
+      background: #f9fafb;
+      border-radius: 16px;
+      padding: 18px;
+      margin-bottom: 18px;
+      line-height: 1.8;
+    }
+    .choice {
+      width: 100%;
+      text-align: left;
+      padding: 14px 16px;
+      margin-bottom: 12px;
+      border: 1px solid #d1d5db;
+      border-radius: 14px;
+      background: #fff;
+      cursor: pointer;
+      font-size: 16px;
+      transition: 0.2s;
+    }
+    .choice:hover { background: #f9fafb; }
+    .choice.selected {
+      border-color: #111827;
+      background: #eef2ff;
+    }
+    .choice.correct {
+      border-color: #10b981;
+      background: #ecfdf5;
+    }
+    .choice.wrong {
+      border-color: #f43f5e;
+      background: #fff1f2;
+    }
+    .choice.disabled {
+      cursor: default;
+      opacity: 0.9;
+    }
+    .buttons {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 18px;
+    }
+    button.action {
+      border: none;
+      border-radius: 14px;
+      padding: 12px 18px;
+      font-size: 15px;
+      cursor: pointer;
+    }
+    .primary {
+      background: #111827;
+      color: white;
+    }
+    .secondary {
+      background: white;
+      color: #111827;
+      border: 1px solid #d1d5db;
+    }
+    .primary:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+    .result, .explanation {
+      margin-top: 18px;
+      border-radius: 16px;
+      padding: 18px;
+      line-height: 1.8;
+    }
+    .result {
+      background: #f9fafb;
+      border: 1px solid #e5e7eb;
+    }
+    .explanation {
+      background: #eff6ff;
+      border: 1px solid #bfdbfe;
+    }
+    .hidden { display: none; }
+    .score {
+      font-size: 22px;
+      margin: 18px 0;
+    }
+    @media (max-width: 640px) {
+      .container { margin: 16px auto; padding: 12px; }
+      .card { padding: 18px; }
+      h1 { font-size: 24px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="card">
+      <h1>獣医学クイズ</h1>
+      <div class="sub">4択から選んで、「回答を見る」で正誤表示、「解説を見る」で解説を確認できます。</div>
+
+      <div id="quiz-area">
+        <div class="progress" id="progress"></div>
+        <div id="question-title" style="font-weight: bold; margin-bottom: 10px;"></div>
+        <div class="question-box" id="question-text"></div>
+        <div id="choices"></div>
+
+        <div class="buttons">
+          <button class="action primary" id="answer-btn" disabled>回答を見る</button>
+          <button class="action secondary hidden" id="explanation-btn">解説を見る</button>
+          <button class="action primary hidden" id="next-btn">次の問題へ</button>
+        </div>
+
+        <div class="result hidden" id="result-box"></div>
+        <div class="explanation hidden" id="explanation-box"></div>
+      </div>
+
+      <div id="finish-area" class="hidden">
+        <h2>結果発表</h2>
+        <div class="score" id="score-text"></div>
+        <button class="action primary" id="restart-btn">もう一度はじめる</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const questions = [
+      {
+        title: "第1問：犬の正常体温",
+        question: "犬の正常体温として最も適切なのはどれか。",
+        choices: ["34.5〜35.5℃", "36.0〜37.0℃", "37.5〜39.2℃", "40.0〜41.0℃"],
+        correct: 2,
+        explanation: "犬の正常体温は一般的に37.5〜39.2℃とされる。39.5℃以上になると発熱の可能性を考える。小型犬や興奮時はやや高くなることもある。"
+      },
+      {
+        title: "第2問：猫の感染症",
+        question: "猫免疫不全ウイルス感染症の原因ウイルスはどれか。",
+        choices: ["パルボウイルス", "レトロウイルス", "コロナウイルス", "アデノウイルス"],
+        correct: 1,
+        explanation: "猫免疫不全ウイルス（FIV）はレトロウイルス科レンチウイルス属に属する。人のHIVと同様に免疫細胞を攻撃し、免疫力低下を引き起こす。"
+      },
+      {
+        title: "第3問：反芻動物",
+        question: "牛の胃のうち『第1胃』はどれか。",
+        choices: ["皺胃", "蜂巣胃", "重複胃", "ルーメン"],
+        correct: 3,
+        explanation: "反芻動物の胃は4つに分かれる。1. ルーメン（第1胃） 2. 網胃（第2胃） 3. 葉胃（第3胃） 4. 皺胃（第4胃）。ルーメンは微生物発酵による消化を行う最大の胃である。"
+      },
+      {
+        title: "第4問：犬のワクチン",
+        question: "犬ジステンパーウイルスが感染する主な細胞はどれか。",
+        choices: ["赤血球", "上皮細胞とリンパ系細胞", "骨芽細胞", "平滑筋細胞"],
+        correct: 1,
+        explanation: "犬ジステンパーウイルスはリンパ組織と上皮組織に感染する。そのため、免疫抑制・呼吸器症状・消化器症状・神経症状など多臓器に症状が現れる。"
+      },
+      {
+        title: "第5問：寄生虫",
+        question: "犬糸状虫（フィラリア）の中間宿主はどれか。",
+        choices: ["ノミ", "マダニ", "蚊", "ハエ"],
+        correct: 2,
+        explanation: "犬糸状虫（Dirofilaria immitis）は蚊を中間宿主とする。感染犬の血液中にいるミクロフィラリアを蚊が吸血し、体内でL3幼虫まで発育した後、別の犬へ感染する。"
+      }
+    ];
+
+    let currentIndex = 0;
+    let selectedIndex = null;
+    let answerShown = false;
+    let score = 0;
+
+    const progress = document.getElementById("progress");
+    const questionTitle = document.getElementById("question-title");
+    const questionText = document.getElementById("question-text");
+    const choicesEl = document.getElementById("choices");
+    const answerBtn = document.getElementById("answer-btn");
+    const explanationBtn = document.getElementById("explanation-btn");
+    const nextBtn = document.getElementById("next-btn");
+    const resultBox = document.getElementById("result-box");
+    const explanationBox = document.getElementById("explanation-box");
+    const quizArea = document.getElementById("quiz-area");
+    const finishArea = document.getElementById("finish-area");
+    const scoreText = document.getElementById("score-text");
+    const restartBtn = document.getElementById("restart-btn");
+
+    function renderQuestion() {
+      const q = questions[currentIndex];
+      selectedIndex = null;
+      answerShown = false;
+
+      progress.textContent = `${currentIndex + 1} / ${questions.length}`;
+      questionTitle.textContent = q.title;
+      questionText.textContent = q.question;
+      choicesEl.innerHTML = "";
+      resultBox.classList.add("hidden");
+      explanationBox.classList.add("hidden");
+      explanationBtn.classList.add("hidden");
+      nextBtn.classList.add("hidden");
+      answerBtn.disabled = true;
+
+      q.choices.forEach((choice, index) => {
+        const btn = document.createElement("button");
+        btn.className = "choice";
+        btn.innerHTML = `<strong>${String.fromCharCode(65 + index)}.</strong> ${choice}`;
+        btn.addEventListener("click", () => {
+          if (answerShown) return;
+          selectedIndex = index;
+          answerBtn.disabled = false;
+          document.querySelectorAll(".choice").forEach(el => el.classList.remove("selected"));
+          btn.classList.add("selected");
+        });
+        choicesEl.appendChild(btn);
+      });
+    }
+
+    answerBtn.addEventListener("click", () => {
+      if (selectedIndex === null || answerShown) return;
+
+      const q = questions[currentIndex];
+      answerShown = true;
+      const choiceButtons = document.querySelectorAll(".choice");
+
+      choiceButtons.forEach((btn, index) => {
+        btn.classList.add("disabled");
+        if (index === q.correct) {
+          btn.classList.add("correct");
+        } else if (index === selectedIndex) {
+          btn.classList.add("wrong");
+        }
+      });
+
+      if (selectedIndex === q.correct) {
+        score++;
+        resultBox.innerHTML = `<strong>正解です！</strong><br>正解：${String.fromCharCode(65 + q.correct)}. ${q.choices[q.correct]}`;
+      } else {
+        resultBox.innerHTML = `<strong>不正解です</strong><br>正解：${String.fromCharCode(65 + q.correct)}. ${q.choices[q.correct]}`;
+      }
+
+      explanationBox.innerHTML = `<strong>解説</strong><br>${q.explanation}`;
+      resultBox.classList.remove("hidden");
+      explanationBtn.classList.remove("hidden");
+      nextBtn.classList.remove("hidden");
+      answerBtn.disabled = true;
+      nextBtn.textContent = currentIndex === questions.length - 1 ? "結果を見る" : "次の問題へ";
+    });
+
+    explanationBtn.addEventListener("click", () => {
+      explanationBox.classList.toggle("hidden");
+      explanationBtn.textContent = explanationBox.classList.contains("hidden") ? "解説を見る" : "解説を閉じる";
+    });
+
+    nextBtn.addEventListener("click", () => {
+      currentIndex++;
+      if (currentIndex < questions.length) {
+        renderQuestion();
+      } else {
+        showResult();
+      }
+    });
+
+    function showResult() {
+      quizArea.classList.add("hidden");
+      finishArea.classList.remove("hidden");
+      scoreText.textContent = `${questions.length}問中 ${score}問正解！（正答率 ${Math.round(score / questions.length * 100)}%）`;
+    }
+
+    restartBtn.addEventListener("click", () => {
+      currentIndex = 0;
+      score = 0;
+      finishArea.classList.add("hidden");
+      quizArea.classList.remove("hidden");
+      renderQuestion();
+    });
+
+    renderQuestion();
+  </script>
+</body>
+</html>
